@@ -1,0 +1,63 @@
+// L'Oréal Claims Intelligence Engine — data model
+// Claim 1 ─── N Assessment  (a claim can be re-assessed; every verdict is an immutable audit row)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ClaimType {
+  ANTI_AGING
+  HYDRATION
+  BRIGHTENING
+  UV_PROTECTION
+  HAIR_REPAIR
+  SENSITIVE_SKIN
+}
+
+enum ClaimStatus {
+  PROPOSED             // Business team proposes claim
+  SCREENED             // Claim manager filtered for applicability/feasibility
+  FORMULATION_TESTING  // Scientist running product formulation tests
+  UNDER_EVALUATION     // Evaluator attached clinical study, awaiting/computing verdict
+  ASSESSED             // LLM assessment persisted
+}
+
+model Claim {
+  id          String       @id @default(uuid())
+  productName String
+  claimText   String
+  claimType   ClaimType
+  formula     String?      @db.Text // INCI ingredient list
+  status      ClaimStatus  @default(PROPOSED)
+  submittedBy String       @default("R&I Scientist")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  assessments Assessment[]
+
+  @@index([status])
+}
+
+model Assessment {
+  id             String   @id @default(uuid())
+  claim          Claim    @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  claimId        String
+  // --- Clinical evidence submitted by the evaluator ---
+  studyTitle     String
+  methodology    String   @db.Text
+  resultsSummary String   @db.Text
+  sampleSize     Int?
+  durationWeeks  Int?
+  // --- LLM verdict (structured output) ---
+  justified      Boolean
+  confidence     Float // 0.0 - 1.0
+  reasoning      String   @db.Text
+  model          String // model used, for auditability / prompt-version drift analysis
+  createdAt      DateTime @default(now())
+
+  @@index([claimId])
+}
